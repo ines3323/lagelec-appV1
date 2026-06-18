@@ -645,11 +645,12 @@ tbody tr:last-child td{border-bottom:none}
     <h2 id="fac-topbar-title">Facturation</h2>
     <div class="topbar-actions">
       <div id="fac-list-actions" style="display:flex;gap:8px">
-        <button class="btn btn-primary" onclick="openModal('modal-new-facture')">＋ Nouvelle facture</button>
+        <button class="btn btn-primary" onclick="openNewFacModal()">＋ Nouvelle facture</button>
       </div>
       <div id="fac-detail-actions" style="display:none;gap:8px">
         <button class="btn" onclick="backToFacList()">◀ Liste factures</button>
         <button class="btn btn-accent" onclick="exportFacPDF()">📥 Exporter PDF</button>
+        <button class="btn btn-sm" onclick="openEditFacModal()" style="background:#f0f9ff;color:#0369a1;border-color:#bae6fd">✏️ Modifier</button>
         <button class="btn btn-danger btn-sm" onclick="deleteCurrentFac()">🗑️ Supprimer</button>
       </div>
     </div>
@@ -658,9 +659,9 @@ tbody tr:last-child td{border-bottom:none}
     <!-- LISTING -->
     <div id="fac-list-view">
       <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="stat-card"><div class="stat-icon si-green">💰</div><div><div class="stat-label">Payées ce mois</div><div class="stat-value">11 240 €</div></div></div>
-        <div class="stat-card"><div class="stat-icon si-amber">⏳</div><div><div class="stat-label">En attente</div><div class="stat-value">5 080 €</div></div></div>
-        <div class="stat-card"><div class="stat-icon si-red">⚠️</div><div><div class="stat-label">En retard</div><div class="stat-value">1 200 €</div></div></div>
+        <div class="stat-card"><div class="stat-icon si-green">💰</div><div><div class="stat-label">Payées</div><div class="stat-value" id="fac-stat-paid">—</div></div></div>
+        <div class="stat-card"><div class="stat-icon si-amber">⏳</div><div><div class="stat-label">En attente</div><div class="stat-value" id="fac-stat-pending">—</div></div></div>
+        <div class="stat-card"><div class="stat-icon si-red">⚠️</div><div><div class="stat-label">En retard</div><div class="stat-value" id="fac-stat-late">—</div></div></div>
       </div>
       <div class="card"><div class="card-body" style="padding:0"><table>
         <thead><tr><th>N°</th><th>Client</th><th>Date</th><th>Échéance</th><th>TTC</th><th>Statut</th><th>Actions</th></tr></thead>
@@ -1326,17 +1327,60 @@ tbody tr:last-child td{border-bottom:none}
     <div class="modal-header"><span>🧾</span><h3>Nouvelle facture</h3><button class="btn btn-icon" onclick="closeModal('modal-new-facture')">✕</button></div>
     <div class="modal-body">
       <div class="form-row cols2">
-        <div class="form-group"><label class="form-label">Depuis un devis accepté</label>
-          <select class="form-control"><option>DEV-2026-023 — SARL Dupont</option><option>DEV-2026-021 — Moreau Luc</option><option>— Manuellement —</option></select>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Depuis un devis (optionnel)</label>
+          <select class="form-control" id="nf-devis-sel" onchange="onNewFacDevisChange(this)">
+            <option value="">— Sans devis (saisie manuelle) —</option>
+          </select>
         </div>
-        <div class="form-group"><label class="form-label">Date</label><input class="form-control" type="date"></div>
-        <div class="form-group"><label class="form-label">Délai paiement</label><select class="form-control"><option>30 jours</option><option>45 jours</option><option>60 jours</option><option>Immédiat</option></select></div>
-        <div class="form-group"><label class="form-label">Mode règlement</label><select class="form-control"><option>Virement</option><option>Chèque</option><option>Espèces</option><option>CB</option></select></div>
+        <div id="nf-manual-block" class="form-group" style="grid-column:1/-1">
+          <div class="form-row cols2">
+            <div class="form-group"><label class="form-label">Client *</label><select class="form-control" id="nf-client-sel"><option value="">— Sélectionner —</option></select></div>
+            <div class="form-group"><label class="form-label">Objet *</label><input class="form-control" id="nf-objet" placeholder="Ex: Travaux électriques"></div>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Date émission</label><input class="form-control" type="date" id="nf-date"></div>
+        <div class="form-group"><label class="form-label">Délai paiement</label><select class="form-control" id="nf-delai"><option>30 jours</option><option>45 jours</option><option>60 jours</option><option>Immédiat</option></select></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Mode règlement</label><select class="form-control" id="nf-mode"><option>Virement</option><option>Chèque</option><option>Espèces</option><option>CB</option></select></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-new-facture')">Annuler</button>
-      <button class="btn btn-primary" onclick="closeModal('modal-new-facture');showToast('✅ Facture FAC-2026-019 créée')">Créer la facture</button>
+      <button class="btn btn-primary" onclick="saveNewFac()">Créer la facture</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : Modifier facture -->
+<div id="modal-edit-fac" class="modal-overlay" onclick="closeOut(event,'modal-edit-fac')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><span>✏️</span><h3>Modifier la facture</h3><button class="btn btn-icon" onclick="closeModal('modal-edit-fac')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Statut</label>
+        <select class="form-control" id="ef-statut">
+          <option value="En attente">⏳ En attente</option>
+          <option value="Payée">✅ Payée</option>
+          <option value="En retard">⚠️ En retard</option>
+          <option value="Annulée">❌ Annulée</option>
+        </select>
+      </div>
+      <div class="form-row cols2">
+        <div class="form-group"><label class="form-label">Date émission</label><input class="form-control" type="date" id="ef-date-emission"></div>
+        <div class="form-group"><label class="form-label">Date échéance</label><input class="form-control" type="date" id="ef-date-echeance"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Mode règlement</label>
+        <select class="form-control" id="ef-mode">
+          <option>Virement — 30 jours</option>
+          <option>Virement — 45 jours</option>
+          <option>Virement — 60 jours</option>
+          <option>Chèque</option>
+          <option>Espèces</option>
+          <option>CB</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-edit-fac')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditFac()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -2607,6 +2651,19 @@ function renderFacList(){
     td.appendChild(btnOpen); td.appendChild(btnDel);
     tbody.appendChild(tr);
   });
+  // Mise à jour stats dynamiques
+  const parseTTC=s=>parseFloat((s||'').replace(/[^\d.,]/g,'').replace(',','.'))||0;
+  let paid=0,pending=0,late=0;
+  facturesList.forEach(f=>{
+    const v=parseTTC(f.ttc);
+    if(f.statut==='Payée') paid+=v;
+    else if(f.statut==='En attente') pending+=v;
+    else if(f.statut==='En retard') late+=v;
+  });
+  const fmt=v=>v?v.toLocaleString('fr-FR',{maximumFractionDigits:0})+' €':'—';
+  const ps=document.getElementById('fac-stat-paid'); if(ps) ps.textContent=fmt(paid);
+  const pe=document.getElementById('fac-stat-pending'); if(pe) pe.textContent=fmt(pending);
+  const pl=document.getElementById('fac-stat-late'); if(pl) pl.textContent=fmt(late);
 }
 
 function askDeleteFac(num){
@@ -2792,6 +2849,125 @@ function backToFacList() {
   document.getElementById('fac-list-actions').style.display='flex';
   document.getElementById('fac-detail-actions').style.display='none';
   document.getElementById('fac-topbar-title').textContent='Facturation';
+}
+
+function openNewFacModal(){
+  // Populate devis select
+  const sel=document.getElementById('nf-devis-sel');
+  sel.innerHTML='<option value="">— Sans devis (saisie manuelle) —</option>';
+  devisList.forEach(d=>{
+    const opt=document.createElement('option');
+    opt.value=d.num; opt.textContent=d.num+' — '+d.client+(d.statut?' ('+d.statut+')':'');
+    sel.appendChild(opt);
+  });
+  // Populate client select
+  const csel=document.getElementById('nf-client-sel');
+  csel.innerHTML='<option value="">— Sélectionner —</option>';
+  clients.forEach(c=>{
+    const opt=document.createElement('option');
+    opt.value=c.id; opt.textContent=(c.prenom+' '+c.nom).trim();
+    csel.appendChild(opt);
+  });
+  document.getElementById('nf-manual-block').style.display='block';
+  document.getElementById('nf-date').valueAsDate=new Date();
+  document.getElementById('nf-objet').value='';
+  openModal('modal-new-facture');
+}
+function onNewFacDevisChange(sel){
+  document.getElementById('nf-manual-block').style.display=sel.value?'none':'block';
+}
+function saveNewFac(){
+  const devisNum=document.getElementById('nf-devis-sel').value;
+  const dateVal=document.getElementById('nf-date').value;
+  const delai=document.getElementById('nf-delai').value;
+  const mode=document.getElementById('nf-mode').value;
+  // Auto-generate facture number
+  const nums=facturesList.map(f=>parseInt((f.num||'').split('-')[2]||0)).filter(Boolean);
+  const nextNum=nums.length?Math.max(...nums)+1:1;
+  const year=new Date().getFullYear();
+  const facNum='FAC-'+year+'-'+String(nextNum).padStart(3,'0');
+  if(facturesList.find(f=>f.num===facNum)){showToast('⚠️ Numéro de facture déjà existant');return;}
+  const dateObj=dateVal?new Date(dateVal):new Date();
+  const daysMap={'30 jours':30,'45 jours':45,'60 jours':60,'Immédiat':0};
+  const echeanceObj=new Date(dateObj);
+  echeanceObj.setDate(echeanceObj.getDate()+(daysMap[delai]||30));
+  const fmtD=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  const fmtLong=d=>d.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  let client='',clientAdresse='',objet='',lignes=[];
+  if(devisNum){
+    const dl=devisList.find(x=>x.num===devisNum);
+    const dd=devisData[devisNum];
+    if(!dl){showToast('⚠️ Devis introuvable');return;}
+    client=dl.client; clientAdresse=(dd&&dd.clientAdresse)||''; objet=(dd&&dd.objet)||dl.num;
+    lignes=(dd&&dd.lignes)||[];
+  } else {
+    const cid=parseInt(document.getElementById('nf-client-sel').value)||null;
+    const c=clients.find(x=>x.id===cid);
+    objet=document.getElementById('nf-objet').value.trim();
+    if(!objet){showToast('⚠️ Objet obligatoire');return;}
+    if(c) {client=(c.prenom+' '+c.nom).trim(); clientAdresse=[c.rue,c.cp+' '+c.ville].filter(Boolean).join('<br>');}
+    else if(!cid){showToast('⚠️ Sélectionnez un client');return;}
+  }
+  let totalHT=0,totalTVA=0;
+  lignes.forEach(l=>{const ht=l.qte*l.puHT;totalHT+=ht;totalTVA+=ht*l.tva/100;});
+  const fmtEuro=v=>v.toLocaleString('fr-FR',{maximumFractionDigits:0})+' €';
+  factureData[facNum]={client,clientAdresse,dateEmission:fmtLong(dateObj),dateEcheance:fmtLong(echeanceObj),objet,refDevis:devisNum||'—',statut:'En attente',statutCls:'background:#fef3c7;color:#92400e',modeReglement:mode+' — '+delai,lignes};
+  facturesList.unshift({num:facNum,client,date:fmtD(dateObj),echeance:fmtD(echeanceObj),ttc:totalHT>0?fmtEuro(totalHT+totalTVA):'—',statut:'En attente',statutCls:'ba',_stockApplied:false});
+  closeModal('modal-new-facture');
+  renderFacList();
+  saveData();
+  showToast('✅ Facture '+facNum+' créée');
+}
+function openEditFacModal(){
+  if(!currentFacNum) return;
+  const fl=facturesList.find(f=>f.num===currentFacNum);
+  const fd=factureData[currentFacNum];
+  if(!fl) return;
+  document.getElementById('ef-statut').value=fl.statut||'En attente';
+  // Parse dates back to yyyy-mm-dd for input
+  const parseDate=s=>{
+    if(!s) return '';
+    const months={'janvier':'01','février':'02','mars':'03','avril':'04','mai':'05','juin':'06','juillet':'07','août':'08','septembre':'09','octobre':'10','novembre':'11','décembre':'12'};
+    const m=s.match(/(\d+)\s+(\S+)\s+(\d{4})/);
+    if(m) return m[3]+'-'+(months[m[2].toLowerCase()]||'01')+'-'+m[1].padStart(2,'0');
+    return '';
+  };
+  document.getElementById('ef-date-emission').value=parseDate(fd&&fd.dateEmission);
+  document.getElementById('ef-date-echeance').value=parseDate(fd&&fd.dateEcheance);
+  const modeOpts=document.getElementById('ef-mode').options;
+  const modeVal=(fd&&fd.modeReglement)||'';
+  let found=false;
+  for(let i=0;i<modeOpts.length;i++){if(modeOpts[i].value===modeVal){modeOpts[i].selected=true;found=true;break;}}
+  if(!found) modeOpts[0].selected=true;
+  openModal('modal-edit-fac');
+}
+function saveEditFac(){
+  if(!currentFacNum) return;
+  const fl=facturesList.find(f=>f.num===currentFacNum);
+  const fd=factureData[currentFacNum];
+  if(!fl) return;
+  const statut=document.getElementById('ef-statut').value;
+  const statutMap={'En attente':{cls:'ba',style:'background:#fef3c7;color:#92400e'},'Payée':{cls:'bg',style:'background:#d1fae5;color:#065f46'},'En retard':{cls:'br',style:'background:#fee2e2;color:#991b1b'},'Annulée':{cls:'',style:'background:#f3f4f6;color:#6b7280'}};
+  const s=statutMap[statut]||statutMap['En attente'];
+  fl.statut=statut; fl.statutCls=s.cls;
+  const de=document.getElementById('ef-date-emission').value;
+  const dec=document.getElementById('ef-date-echeance').value;
+  const fmtD=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  const fmtLong=d=>d.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  if(de){fl.date=fmtD(new Date(de));if(fd)fd.dateEmission=fmtLong(new Date(de));}
+  if(dec){fl.echeance=fmtD(new Date(dec));if(fd)fd.dateEcheance=fmtLong(new Date(dec));}
+  const mode=document.getElementById('ef-mode').value;
+  if(fd){fd.statut=statut;fd.statutCls=s.style;fd.modeReglement=mode;}
+  // Refresh detail view if open
+  if(currentFacNum){
+    const sb=document.getElementById('fv-statut-badge');
+    if(sb){sb.textContent=statut;sb.style.cssText=s.style+';padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;display:inline-block;margin-top:8px';}
+    if(fd){document.getElementById('fv-date-emission').textContent=fd.dateEmission;document.getElementById('fv-date-echeance').textContent=fd.dateEcheance;document.getElementById('fv-mode-reglement').textContent=fd.modeReglement;}
+  }
+  closeModal('modal-edit-fac');
+  renderFacList();
+  saveData();
+  showToast('✅ Facture mise à jour');
 }
 
 // ====== SHARED: render lignes + totaux ======
