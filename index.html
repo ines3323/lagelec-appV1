@@ -522,6 +522,7 @@ tbody tr:last-child td{border-bottom:none}
     <div class="topbar-actions">
       <div id="devis-list-actions" style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="openModal('modal-new-devis')">＋ Nouveau devis</button>
+        <button class="btn btn-accent btn-sm" onclick="exportDevisListPDF()">📥 Export PDF</button>
       </div>
       <div id="devis-detail-actions" style="display:none;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="backToDevisList()">◀ Liste devis</button>
@@ -646,6 +647,7 @@ tbody tr:last-child td{border-bottom:none}
     <div class="topbar-actions">
       <div id="fac-list-actions" style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="openNewFacModal()">＋ Nouvelle facture</button>
+        <button class="btn btn-accent btn-sm" onclick="exportFacListPDF()">📥 Export PDF</button>
       </div>
       <div id="fac-detail-actions" style="display:none;gap:8px">
         <button class="btn" onclick="backToFacList()">◀ Liste factures</button>
@@ -781,6 +783,7 @@ tbody tr:last-child td{border-bottom:none}
     <div class="topbar-actions">
       <div id="interv-list-actions" style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-primary" onclick="openModal('modal-new-interv')">＋ Nouvelle intervention</button>
+        <button class="btn btn-accent btn-sm" onclick="exportIntervListPDF()">📥 Export PDF</button>
       </div>
       <div id="interv-detail-actions" style="display:none;gap:8px">
         <button class="btn" onclick="backToIntervList()">◀ Liste interventions</button>
@@ -908,6 +911,7 @@ tbody tr:last-child td{border-bottom:none}
     <div id="clients-list-actions" style="display:flex;gap:8px;align-items:center">
       <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" class="form-control" placeholder="Rechercher..." oninput="filterClients(this.value)"></div>
       <button class="btn btn-primary" onclick="openModal('modal-new-client')">＋ Nouveau client</button>
+      <button class="btn btn-accent btn-sm" onclick="exportClientListPDF()">📥 Export PDF</button>
     </div>
     <div id="client-detail-actions" style="display:none;gap:8px">
       <button class="btn" onclick="backToClientList()">◀ Liste clients</button>
@@ -1114,6 +1118,9 @@ tbody tr:last-child td{border-bottom:none}
 </div>
 
 </main>
+
+<!-- Conteneur caché pour export PDF -->
+<div id="print-container" style="position:fixed;left:-9999px;top:0;background:#fff;width:794px;padding:40px 48px;font-family:'Segoe UI',sans-serif;font-size:13px;color:#1a1a2e"></div>
 
 <!-- ===== MODALS ===== -->
 
@@ -3465,6 +3472,91 @@ function loadData(){
     const si=localStorage.getItem('lg_stockItems'); if(si) stockItems=JSON.parse(si);
     const cat=localStorage.getItem('lg_catalogue'); if(cat){const p=JSON.parse(cat);catalogue.prestations=p.prestations;catalogue.materiel=p.materiel;}
   }catch(e){}
+}
+
+// ====== EXPORT LISTES PDF ======
+async function exportListPDF(title, headers, rows, filename){
+  if(!rows.length){showToast('⚠️ Aucune donnée à exporter');return;}
+  const today=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
+  const headerCols=headers.map(h=>`<th style="background:#1C00B8;color:#fff;padding:9px 12px;text-align:left;font-size:12px;font-weight:600;white-space:nowrap">${h}</th>`).join('');
+  const bodyRows=rows.map((r,i)=>{
+    const cells=r.map(c=>`<td style="padding:8px 12px;font-size:12px;border-bottom:1px solid #f0f1f3;color:#374151">${c}</td>`).join('');
+    return `<tr style="background:${i%2===0?'#fff':'#f9fafb'}">${cells}</tr>`;
+  }).join('');
+  const el=document.getElementById('print-container');
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #1C00B8">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;background:#1C00B8;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">💡</div>
+        <div>
+          <div style="font-size:18px;font-weight:800;color:#1C00B8;letter-spacing:2px">LAGELEC</div>
+          <div style="font-size:11px;color:#6b7280">Électricité générale · Blanquefort (33)</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:16px;font-weight:700;color:#1a1a2e">${title}</div>
+        <div style="font-size:11px;color:#6b7280">Exporté le ${today}</div>
+        <div style="font-size:11px;color:#6b7280">${rows.length} enregistrement${rows.length>1?'s':''}</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>${headerCols}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+  showToast('⏳ Génération du PDF...');
+  try{
+    const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#fff',logging:false});
+    const imgData=canvas.toDataURL('image/jpeg',0.95);
+    const{jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const pdfW=pdf.internal.pageSize.getWidth();
+    const pdfH=pdf.internal.pageSize.getHeight();
+    const ratio=canvas.width/canvas.height;
+    const imgH=pdfW/ratio;
+    if(imgH<=pdfH){
+      pdf.addImage(imgData,'JPEG',0,0,pdfW,imgH);
+    } else {
+      let remaining=imgH,y=0;
+      while(remaining>0){
+        const sliceH=Math.min(pdfH,remaining);
+        const sliceCanvas=document.createElement('canvas');
+        sliceCanvas.width=canvas.width; sliceCanvas.height=Math.round(sliceH/imgH*canvas.height);
+        const ctx=sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas,0,Math.round(y/imgH*canvas.height),canvas.width,sliceCanvas.height,0,0,canvas.width,sliceCanvas.height);
+        if(y>0) pdf.addPage();
+        pdf.addImage(sliceCanvas.toDataURL('image/jpeg',0.95),'JPEG',0,0,pdfW,sliceH);
+        y+=sliceH; remaining-=sliceH;
+      }
+    }
+    pdf.save(filename);
+    showToast('✅ PDF téléchargé : '+filename);
+  }catch(e){showToast('❌ Erreur export PDF');}
+}
+
+function exportIntervListPDF(){
+  const rows=interventions.map(i=>[
+    i.client||'—',
+    i.objet||'—',
+    i.date||'—',
+    i.montant||'—',
+    pipeLabels[i.etape]||i.etape||'—'
+  ]);
+  exportListPDF('Liste des interventions',['Client','Objet','Date','Montant','Étape'],rows,'interventions_'+new Date().toISOString().slice(0,10)+'.pdf');
+}
+
+function exportDevisListPDF(){
+  const rows=devisList.map(d=>[d.num||'—',d.client||'—',d.date||'—',d.ht||'—',d.ttc||'—',d.statut||'—']);
+  exportListPDF('Liste des devis',['Numéro','Client','Date','HT','TTC','Statut'],rows,'devis_'+new Date().toISOString().slice(0,10)+'.pdf');
+}
+
+function exportFacListPDF(){
+  const rows=facturesList.map(f=>[f.num||'—',f.client||'—',f.date||'—',f.echeance||'—',f.ttc||'—',f.statut||'—']);
+  exportListPDF('Liste des factures',['Numéro','Client','Date émission','Échéance','TTC','Statut'],rows,'factures_'+new Date().toISOString().slice(0,10)+'.pdf');
+}
+
+function exportClientListPDF(){
+  const rows=clients.map(c=>[(c.prenom+' '+c.nom).trim()||'—',c.type||'—',c.tel||'—',([c.cp,c.ville].filter(Boolean).join(' '))||'—',(c.devis||[]).length,(c.factures||[]).length]);
+  exportListPDF('Liste des clients',['Nom','Type','Téléphone','Ville','Devis','Factures'],rows,'clients_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
 
 function resetAllData(){
