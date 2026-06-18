@@ -1101,6 +1101,13 @@ tbody tr:last-child td{border-bottom:none}
           <div class="form-group"><label class="form-label">Fréquence</label><select class="form-control"><option>Immédiatement</option><option>Résumé quotidien</option><option>Résumé hebdomadaire</option></select></div>
         </div>
       </div>
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-header"><h3>🗑️ Données de l'application</h3></div>
+        <div class="card-body">
+          <p style="color:var(--muted);font-size:13px;margin-bottom:14px">Toutes vos données (clients, interventions, devis, factures, RDV) sont stockées localement dans ce navigateur. Vous pouvez les effacer pour repartir de zéro.</p>
+          <button class="btn btn-danger" onclick="resetAllData()">🗑️ Réinitialiser toutes les données</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1581,70 +1588,9 @@ const catalogue = {
   ]
 };
 
-let clients = [
-  {id:1,prenom:'Sophie',nom:'Martin',type:'particulier',tel:'06 12 34 56 78',rue:'12 rue des Lilas',cp:'13008',ville:'Marseille',
-    historique:[
-      {date:'15 juin 2026',titre:'Devis remis — Réfection tableau électrique',sub:'1 240 € TTC · En attente',type:'event'},
-      {date:'10 mars 2026',titre:'Intervention — Remplacement 3 prises + interrupteur',sub:'320 € TTC · Réglé',type:'event'},
-      {date:'5 nov. 2024',titre:'Dépannage — Panne secteur cuisine',sub:'180 € TTC · Réglé',type:'event'},
-    ],
-    devis:[{num:'DEV-2026-024',date:'15/06/26',ttc:'1 240 €',statut:'En attente',cls:'ba'}],
-    factures:[{num:'FAC-2026-012',date:'12/03/26',ttc:'320 €',statut:'Payée',cls:'bg'}]
-  },
-  {id:2,prenom:'',nom:'SARL Dupont',type:'professionnel',tel:'04 91 00 11 22',rue:'45 bd Michelet',cp:'13009',ville:'Marseille',
-    historique:[
-      {date:'12 juin 2026',titre:'Devis accepté — Installation atelier',sub:'3 800 € TTC',type:'event'},
-      {date:'2 juin 2026',titre:'Visite de chantier',sub:'',type:'event'},
-    ],
-    devis:[{num:'DEV-2026-023',date:'12/06/26',ttc:'3 800 €',statut:'Accepté',cls:'bg'}],
-    factures:[{num:'FAC-2026-018',date:'01/06/26',ttc:'3 800 €',statut:'Payée',cls:'bg'}]
-  },
-  {id:3,prenom:'Pierre',nom:'Leblanc',type:'particulier',tel:'07 55 44 33 22',rue:'3 allée des Pins',cp:'13005',ville:'Marseille',
-    historique:[{date:'10 juin 2026',titre:'Devis envoyé — Rénovation électrique',sub:'620 € TTC',type:'event'}],
-    devis:[{num:'DEV-2026-022',date:'10/06/26',ttc:'620 €',statut:'Envoyé',cls:'bb'}],
-    factures:[]
-  },
-  {id:4,prenom:'Luc',nom:'Moreau',type:'particulier',tel:'06 88 77 66 55',rue:'8 cours Julien',cp:'13006',ville:'Marseille',
-    historique:[
-      {date:'5 juin 2026',titre:'Devis accepté — Tableau + prises',sub:'2 640 € TTC',type:'event'},
-      {date:'10 janv. 2026',titre:'Dépannage court-circuit',sub:'220 € TTC · Réglé',type:'event'},
-    ],
-    devis:[{num:'DEV-2026-021',date:'05/06/26',ttc:'2 640 €',statut:'Accepté',cls:'bg'}],
-    factures:[{num:'FAC-2026-017',date:'28/05/26',ttc:'2 640 €',statut:'En attente',cls:'ba'}]
-  },
-];
+let clients = [];
 
-let interventions = [
-  {id:1,clientId:1,client:'Martin Sophie',objet:'Réfection tableau électrique',date:'15/06/26',montant:'1 240 €',etape:'devis',photos:[],
-    journal:[
-      {date:'15 juin 2026 à 14h30',type:'constat',texte:'Tableau électrique vétuste, disjoncteurs anciens, mise aux normes nécessaire.',auteur:'LAGELEC'},
-      {date:'15 juin 2026 à 15h00',type:'action',texte:'Devis établi et remis au client pour validation.',auteur:'LAGELEC'},
-    ]},
-  {id:2,clientId:2,client:'SARL Dupont',objet:'Installation atelier complet',date:'12/06/26',montant:'3 800 €',etape:'rdv',photos:[],
-    journal:[
-      {date:'12 juin 2026 à 9h00',type:'constat',texte:'Visite de l\'atelier — installation complète à prévoir sur 400m².',auteur:'LAGELEC'},
-      {date:'12 juin 2026 à 11h00',type:'action',texte:'Devis établi et accepté par le gérant M. Dupont.',auteur:'LAGELEC'},
-      {date:'17 juin 2026 à 8h30',type:'action',texte:'RDV planifié pour début des travaux le 18/06.',auteur:'LAGELEC'},
-    ]},
-  {id:3,clientId:3,client:'Leblanc Pierre',objet:'Rénovation électrique appartement',date:'10/06/26',montant:'620 €',etape:'diagnostic',photos:[],
-    journal:[
-      {date:'10 juin 2026 à 10h00',type:'constat',texte:'Diagnostic réalisé — câblage ancien, plusieurs prises hors normes.',auteur:'LAGELEC'},
-    ]},
-  {id:4,clientId:4,client:'Moreau Luc',objet:'Tableau + prises salon',date:'05/06/26',montant:'2 640 €',etape:'facture',photos:[],
-    journal:[
-      {date:'5 juin 2026 à 9h00',type:'constat',texte:'Diagnostic tableau et prises salon.',auteur:'LAGELEC'},
-      {date:'10 juin 2026 à 8h00',type:'action',texte:'Travaux réalisés : remplacement tableau + 6 prises.',auteur:'LAGELEC'},
-      {date:'10 juin 2026 à 17h00',type:'materiel',texte:'Matériel utilisé : tableau Hager 13 mod., 6 prises 2P+T, câble 1.5mm² (30m).',auteur:'LAGELEC'},
-      {date:'15 juin 2026 à 9h00',type:'action',texte:'Facture émise et envoyée au client.',auteur:'LAGELEC'},
-    ]},
-  {id:5,clientId:null,client:'Bernard Co.',objet:'Mise aux normes ERP',date:'02/06/26',montant:'4 200 €',etape:'paye',photos:[],
-    journal:[
-      {date:'2 juin 2026 à 8h00',type:'action',texte:'Travaux terminés — conformité ERP validée.',auteur:'LAGELEC'},
-      {date:'5 juin 2026 à 10h00',type:'action',texte:'Paiement reçu par virement.',auteur:'LAGELEC'},
-    ]},
-  {id:6,clientId:null,client:'Petit Anne',objet:'Dépannage prise cuisine',date:'18/06/26',montant:'180 €',etape:'diagnostic',photos:[],
-    journal:[]},
-];
+let interventions = [];
 
 let currentClient = null;
 let catEditId = null;
@@ -2303,8 +2249,20 @@ function saveRdv(){
   } else {
     clientId=parseInt(sel.value)||null;
     clientName=sel.selectedOptions[0]?.textContent||'';
-    showToast('✅ RDV enregistré — Email de confirmation envoyé');
+    showToast('✅ RDV enregistré');
   }
+  const newRdv={
+    id:Date.now(),
+    clientId,
+    client:clientName,
+    type:document.getElementById('rdv-type').value,
+    date:dateVal,
+    heure,
+    duree:document.getElementById('rdv-duree').value,
+    objet:objet||'',
+    adresse:document.getElementById('rdv-adresse').value.trim()
+  };
+  rdvList.push(newRdv);
   closeModal('modal-new-rdv');
   renderCalendar();
   renderRdvList();
@@ -2407,12 +2365,7 @@ function renderCharts(){
 }
 
 // ====== RDV DATA (structured list) ======
-let rdvList = [
-  {id:1,clientId:4,client:'Moreau Luc',type:'Intervention',date:'2026-06-17',heure:'14:00',duree:'2h',objet:'Remplacement tableau',adresse:''},
-  {id:2,clientId:2,client:'SARL Dupont',type:'Intervention',date:'2026-06-18',heure:'09:00',duree:'Journée',objet:'Installation atelier',adresse:'45 bd Michelet 13009'},
-  {id:3,clientId:null,client:'Petit Anne',type:'Visite / devis',date:'2026-06-18',heure:'11:00',duree:'1h',objet:'Dépannage cuisine',adresse:''},
-  {id:4,clientId:null,client:'Bernard Co.',type:'Intervention',date:'2026-06-24',heure:'08:30',duree:'Demi-journée',objet:'ERP vérification',adresse:'12 rue du Commerce 13001'},
-];
+let rdvList = [];
 let currentRdvId = null;
 
 function openNewRdv(){
@@ -2509,12 +2462,7 @@ function deleteRdv(){
 }
 
 // ====== DEVIS LIST (dynamic) ======
-let devisList = [
-  {num:'DEV-2026-024',client:'Martin Sophie',date:'15/06/26',ht:'1 033 €',ttc:'1 240 €',statut:'En attente',statutCls:'ba'},
-  {num:'DEV-2026-023',client:'SARL Dupont',date:'12/06/26',ht:'3 167 €',ttc:'3 800 €',statut:'Accepté',statutCls:'bg'},
-  {num:'DEV-2026-022',client:'Leblanc Pierre',date:'10/06/26',ht:'517 €',ttc:'620 €',statut:'Envoyé',statutCls:'bb'},
-  {num:'DEV-2026-021',client:'Moreau Luc',date:'05/06/26',ht:'2 200 €',ttc:'2 640 €',statut:'Accepté',statutCls:'bg'},
-];
+let devisList = [];
 let currentDevisNum = null;
 
 function renderDevisList(){
@@ -2636,11 +2584,7 @@ function saveDevisEdit(){
 }
 
 // ====== FACTURES LIST (dynamic) ======
-let facturesList = [
-  {num:'FAC-2026-018',client:'SARL Dupont',date:'01/06/26',echeance:'01/07/26',ttc:'3 800 €',statut:'Payée',statutCls:'bg'},
-  {num:'FAC-2026-017',client:'Moreau Luc',date:'28/05/26',echeance:'28/06/26',ttc:'2 640 €',statut:'En attente',statutCls:'ba'},
-  {num:'FAC-2026-016',client:'Bernard Co.',date:'15/05/26',echeance:'15/06/26',ttc:'1 200 €',statut:'En retard',statutCls:'br'},
-];
+let facturesList = [];
 let currentFacNum = null;
 
 function renderFacList(){
@@ -2785,96 +2729,9 @@ function saveClientEdit(){
 }
 
 // ====== DEVIS DATA ======
-const devisData = {
-  'DEV-2026-024': {
-    client:'Martin Sophie', clientAdresse:'12 rue des Lilas<br>13008 Marseille',
-    dateEmission:'15 juin 2026', dateValidite:'15 juillet 2026',
-    objet:'Réfection tableau électrique — Mise aux normes',
-    lignes:[
-      {designation:'Mise aux normes tableau électrique',qte:1,unite:'forfait',puHT:320,tva:10},
-      {designation:'Main d\'œuvre horaire',qte:3,unite:'heure',puHT:65,tva:20},
-      {designation:'Déplacement zone 1',qte:1,unite:'forfait',puHT:25,tva:20},
-    ]
-  },
-  'DEV-2026-023': {
-    client:'SARL Dupont', clientAdresse:'45 bd Michelet<br>13009 Marseille',
-    dateEmission:'12 juin 2026', dateValidite:'12 juillet 2026',
-    objet:'Installation atelier — Travaux électriques complets',
-    lignes:[
-      {designation:'Tableau Hager 13 modules',qte:2,unite:'unité',puHT:85,tva:20},
-      {designation:'Câble 2.5mm² (rouleau 100m)',qte:4,unite:'rouleau',puHT:38,tva:20},
-      {designation:'Installation prise électrique',qte:8,unite:'unité',puHT:45,tva:10},
-      {designation:'Main d\'œuvre horaire',qte:12,unite:'heure',puHT:65,tva:20},
-      {designation:'Déplacement zone 1',qte:3,unite:'forfait',puHT:25,tva:20},
-    ]
-  },
-  'DEV-2026-022': {
-    client:'Leblanc Pierre', clientAdresse:'3 allée des Pins<br>13005 Marseille',
-    dateEmission:'10 juin 2026', dateValidite:'10 juillet 2026',
-    objet:'Rénovation électrique appartement',
-    lignes:[
-      {designation:'Câble 1.5mm² (rouleau 100m)',qte:1,unite:'rouleau',puHT:28,tva:20},
-      {designation:'Prise 2P+T complète',qte:6,unite:'unité',puHT:4.8,tva:20},
-      {designation:'Remplacement disjoncteur',qte:3,unite:'unité',puHT:55,tva:10},
-      {designation:'Main d\'œuvre horaire',qte:4,unite:'heure',puHT:65,tva:20},
-    ]
-  },
-  'DEV-2026-021': {
-    client:'Moreau Luc', clientAdresse:'8 cours Julien<br>13006 Marseille',
-    dateEmission:'05 juin 2026', dateValidite:'05 juillet 2026',
-    objet:'Remplacement tableau + ajout de prises',
-    lignes:[
-      {designation:'Tableau Hager 13 modules',qte:1,unite:'unité',puHT:85,tva:20},
-      {designation:'Installation prise électrique',qte:6,unite:'unité',puHT:45,tva:10},
-      {designation:'Câble 1.5mm² (rouleau 100m)',qte:2,unite:'rouleau',puHT:28,tva:20},
-      {designation:'Main d\'œuvre horaire',qte:8,unite:'heure',puHT:65,tva:20},
-      {designation:'Déplacement zone 1',qte:2,unite:'forfait',puHT:25,tva:20},
-    ]
-  }
-};
+const devisData = {};
 
-const factureData = {
-  'FAC-2026-018': {
-    client:'SARL Dupont', clientAdresse:'45 bd Michelet<br>13009 Marseille',
-    dateEmission:'01 juin 2026', dateEcheance:'01 juillet 2026',
-    objet:'Installation atelier — Travaux électriques complets',
-    refDevis:'DEV-2026-023', statut:'Payée', statutCls:'background:#d1fae5;color:#065f46',
-    modeReglement:'Virement bancaire — 30 jours',
-    lignes:[
-      {designation:'Tableau Hager 13 modules',qte:2,unite:'unité',puHT:85,tva:20},
-      {designation:'Câble 2.5mm² (rouleau 100m)',qte:4,unite:'rouleau',puHT:38,tva:20},
-      {designation:'Installation prise électrique',qte:8,unite:'unité',puHT:45,tva:10},
-      {designation:'Main d\'œuvre horaire',qte:12,unite:'heure',puHT:65,tva:20},
-      {designation:'Déplacement zone 1',qte:3,unite:'forfait',puHT:25,tva:20},
-    ]
-  },
-  'FAC-2026-017': {
-    client:'Moreau Luc', clientAdresse:'8 cours Julien<br>13006 Marseille',
-    dateEmission:'28 mai 2026', dateEcheance:'28 juin 2026',
-    objet:'Remplacement tableau + prises',
-    refDevis:'DEV-2026-021', statut:'En attente', statutCls:'background:#fef3c7;color:#92400e',
-    modeReglement:'Virement bancaire — 30 jours',
-    lignes:[
-      {designation:'Tableau Hager 13 modules',qte:1,unite:'unité',puHT:85,tva:20},
-      {designation:'Installation prise électrique',qte:6,unite:'unité',puHT:45,tva:10},
-      {designation:'Câble 1.5mm² (rouleau 100m)',qte:2,unite:'rouleau',puHT:28,tva:20},
-      {designation:'Main d\'œuvre horaire',qte:8,unite:'heure',puHT:65,tva:20},
-      {designation:'Déplacement zone 1',qte:2,unite:'forfait',puHT:25,tva:20},
-    ]
-  },
-  'FAC-2026-016': {
-    client:'Bernard Co.', clientAdresse:'12 rue du Commerce<br>13001 Marseille',
-    dateEmission:'15 mai 2026', dateEcheance:'15 juin 2026',
-    objet:'Mise aux normes ERP — Bâtiment B',
-    refDevis:'DEV-2026-018', statut:'En retard', statutCls:'background:#fee2e2;color:#991b1b',
-    modeReglement:'Virement bancaire — 30 jours',
-    lignes:[
-      {designation:'Mise aux normes tableau électrique',qte:1,unite:'forfait',puHT:380,tva:10},
-      {designation:'Main d\'œuvre horaire',qte:8,unite:'heure',puHT:65,tva:20},
-      {designation:'Déplacement zone 1',qte:2,unite:'forfait',puHT:25,tva:20},
-    ]
-  }
-};
+const factureData = {};
 
 // ====== DEVIS DETAIL ======
 function openDevisDetail(num) {
@@ -3432,6 +3289,13 @@ function loadData(){
     const si=localStorage.getItem('lg_stockItems'); if(si) stockItems=JSON.parse(si);
     const cat=localStorage.getItem('lg_catalogue'); if(cat){const p=JSON.parse(cat);catalogue.prestations=p.prestations;catalogue.materiel=p.materiel;}
   }catch(e){}
+}
+
+function resetAllData(){
+  customConfirm('Réinitialiser toutes les données','Effacer définitivement tous les clients, interventions, devis, factures et RDV ? Cette action est irréversible.','🗑️',()=>{
+    ['lg_clients','lg_interventions','lg_devisList','lg_devisData','lg_facturesList','lg_factureData','lg_rdvList','lg_stockItems'].forEach(k=>localStorage.removeItem(k));
+    location.reload();
+  });
 }
 
 // ====== INIT ======
