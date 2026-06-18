@@ -1712,12 +1712,6 @@ function openModal(id) {
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 function closeOut(e,id){ if(e.target.id===id) closeModal(id); }
 
-// ====== TOAST ======
-function showToast(msg){
-  const t=document.getElementById('toast');
-  t.textContent=msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),3000);
-}
 
 // ====== CATALOGUE ======
 function renderCatalogue(){
