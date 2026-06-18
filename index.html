@@ -784,6 +784,7 @@ tbody tr:last-child td{border-bottom:none}
       <div id="interv-detail-actions" style="display:none;gap:8px">
         <button class="btn" onclick="backToIntervList()">◀ Liste interventions</button>
         <button class="btn btn-primary btn-sm" onclick="openEditInterv()">✏️ Modifier</button>
+        <button class="btn btn-sm" onclick="annulerDossier()" style="background:#FEE2E2;color:#991B1B;border-color:#FECACA">❌ Annuler</button>
         <button class="btn btn-danger btn-sm" onclick="deleteCurrentInterv()">🗑️ Supprimer</button>
       </div>
     </div>
@@ -799,6 +800,7 @@ tbody tr:last-child td{border-bottom:none}
         <button class="pipe-tag pt-rdv" onclick="filterPipe('rdv',this)">📅 RDV programmé</button>
         <button class="pipe-tag pt-fact" onclick="filterPipe('facture',this)">🧾 Facturé</button>
         <button class="pipe-tag pt-paid" onclick="filterPipe('paye',this)">✅ Payé</button>
+        <button class="pipe-tag br" onclick="filterPipe('annule',this)">❌ Annulé</button>
       </div>
       <div class="card"><div class="card-body" style="padding:0"><table>
         <thead><tr><th>Client</th><th>Objet</th><th>Date création</th><th>Montant</th><th>Étape</th><th>Actions</th></tr></thead>
@@ -1448,7 +1450,13 @@ tbody tr:last-child td{border-bottom:none}
   <div class="modal" style="max-width:480px">
     <div class="modal-header"><span>📅</span><h3>Annuler ce rendez-vous</h3><button class="btn btn-icon" onclick="closeModal('modal-cancel-rdv')">✕</button></div>
     <div class="modal-body">
-      <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;color:#78350f">
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Rendez-vous à annuler</label>
+        <select class="form-control" id="cancel-rdv-sel" onchange="onCancelRdvSelect(this)">
+          <option value="">— Sélectionner un RDV —</option>
+        </select>
+      </div>
+      <div id="cancel-rdv-info" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;color:#78350f;display:none">
         📅 RDV du <b id="cancel-rdv-date"></b> avec <b id="cancel-rdv-client"></b>
       </div>
       <div class="form-group">
@@ -2016,8 +2024,8 @@ function saveNewClient(){
 }
 
 // ====== INTERVENTIONS ======
-const pipeLabels={diagnostic:'🔍 Diagnostic',devis:'📋 Devis remis',rdv:'📅 RDV programmé',facture:'🧾 Facturé',paye:'✅ Payé'};
-const pipeCls={diagnostic:'pt-diag',devis:'pt-devis',rdv:'pt-rdv',facture:'pt-fact',paye:'pt-paid'};
+const pipeLabels={diagnostic:'🔍 Diagnostic',devis:'📋 Devis remis',rdv:'📅 RDV programmé',facture:'🧾 Facturé',paye:'✅ Payé',annule:'❌ Annulé'};
+const pipeCls={diagnostic:'pt-diag',devis:'pt-devis',rdv:'pt-rdv',facture:'pt-fact',paye:'pt-paid',annule:'br'};
 const journalIcons={action:'🔧',constat:'🔍',materiel:'📦',note:'📝',contact:'📞'};
 let currentInterv = null;
 
@@ -2710,6 +2718,19 @@ function deleteCurrentInterv(){
   });
 }
 
+function annulerDossier(){
+  if(!currentInterv) return;
+  if(currentInterv.etape==='annule'){showToast('⚠️ Dossier déjà annulé');return;}
+  customConfirm('Annuler ce dossier','Marquer le dossier <b>'+currentInterv.objet+'</b> comme annulé ?','❌',()=>{
+    currentInterv.etape='annule';
+    const sel=document.getElementById('id-etape-sel');
+    if(sel) sel.value='annule';
+    renderInterventions('all');
+    saveData();
+    showToast('❌ Dossier annulé');
+  });
+}
+
 // ====== CLIENT EDIT ======
 function toggleClientEdit(){
   const view=document.getElementById('cd-view-mode');
@@ -3184,22 +3205,42 @@ function confirmDeleteClient(){
 
 // ====== CANCEL RDV ======
 function openCancelRdvModal(){
-  const rdvList=[
-    {date:'17 juin 2026 à 14h00',client:'Moreau Luc'},
-    {date:'18 juin 2026 à 9h00',client:'SARL Dupont'},
-    {date:'18 juin 2026 à 11h00',client:'Petit Anne'},
-  ];
-  // For now show a select-based modal
-  const rdv=rdvList[0];
-  document.getElementById('cancel-rdv-date').textContent=rdv.date;
-  document.getElementById('cancel-rdv-client').textContent=rdv.client;
-  document.getElementById('cancel-rdv-sms').value=`Bonjour ${rdv.client}, votre rendez-vous du ${rdv.date} avec LAGELEC est annulé. Nous vous contacterons pour reprogrammer. Désolé pour la gêne occasionnée.`;
+  if(!rdvList.length){showToast('⚠️ Aucun rendez-vous à annuler');return;}
+  const sel=document.getElementById('cancel-rdv-sel');
+  const sorted=[...rdvList].sort((a,b)=>a.date.localeCompare(b.date));
+  sel.innerHTML='<option value="">— Sélectionner un RDV —</option>'+sorted.map(r=>{
+    const d=new Date(r.date);
+    const ds=isNaN(d.getTime())?r.date:d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'});
+    return `<option value="${r.id}">${ds}${r.heure?' à '+r.heure:''} — ${r.client}</option>`;
+  }).join('');
+  document.getElementById('cancel-rdv-info').style.display='none';
+  document.getElementById('cancel-rdv-sms').value='';
   openModal('modal-cancel-rdv');
 }
+function onCancelRdvSelect(sel){
+  const id=parseInt(sel.value);
+  const r=rdvList.find(x=>x.id===id);
+  const info=document.getElementById('cancel-rdv-info');
+  if(!r){info.style.display='none';return;}
+  const d=new Date(r.date);
+  const ds=isNaN(d.getTime())?r.date:d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'});
+  const heureStr=r.heure?' à '+r.heure:'';
+  document.getElementById('cancel-rdv-date').textContent=ds+heureStr;
+  document.getElementById('cancel-rdv-client').textContent=r.client;
+  document.getElementById('cancel-rdv-sms').value=`Bonjour ${r.client}, votre rendez-vous du ${ds}${heureStr} avec LAGELEC est annulé. Nous vous contacterons pour reprogrammer. Désolé pour la gêne occasionnée.`;
+  info.style.display='block';
+}
 function confirmCancelRdv(){
+  const id=parseInt(document.getElementById('cancel-rdv-sel').value);
+  if(!id){showToast('⚠️ Sélectionnez un rendez-vous');return;}
+  const idx=rdvList.findIndex(x=>x.id===id);
+  if(idx===-1){showToast('⚠️ RDV introuvable');return;}
+  rdvList.splice(idx,1);
+  saveData();
   closeModal('modal-cancel-rdv');
-  showToast('✅ RDV annulé — SMS envoyé au client');
   renderCalendar();
+  if(typeof renderRdvList==='function') renderRdvList();
+  showToast('✅ RDV annulé');
 }
 
 // ====== INTERV NEW CLIENT ======
