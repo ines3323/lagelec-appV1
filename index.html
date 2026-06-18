@@ -783,6 +783,7 @@ tbody tr:last-child td{border-bottom:none}
       </div>
       <div id="interv-detail-actions" style="display:none;gap:8px">
         <button class="btn" onclick="backToIntervList()">◀ Liste interventions</button>
+        <button class="btn btn-primary btn-sm" onclick="openEditInterv()">✏️ Modifier</button>
         <button class="btn btn-danger btn-sm" onclick="deleteCurrentInterv()">🗑️ Supprimer</button>
       </div>
     </div>
@@ -1405,6 +1406,24 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- Modal : Modifier une intervention -->
+<div id="modal-edit-interv" class="modal-overlay" onclick="closeOut(event,'modal-edit-interv')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header"><span>🔧</span><h3>Modifier l'intervention</h3><button class="btn btn-icon" onclick="closeModal('modal-edit-interv')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Objet</label><input class="form-control" id="ei-objet" placeholder="Description de l'intervention"></div>
+      <div class="form-row cols2">
+        <div class="form-group"><label class="form-label">Date</label><input class="form-control" type="date" id="ei-date"></div>
+        <div class="form-group"><label class="form-label">Montant estimé (€)</label><input class="form-control" type="number" id="ei-montant" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-edit-interv')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveIntervEdit()">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal : Confirmer suppression client -->
 <div id="modal-delete-client" class="modal-overlay" onclick="closeOut(event,'modal-delete-client')">
   <div class="modal" style="max-width:440px">
@@ -1772,6 +1791,7 @@ function saveCat(){
   const desInput=document.getElementById('cat-designation');
   desInput.readOnly=false; desInput.style.background=''; desInput.style.color='';
   renderCatalogue();
+  saveData();
   closeModal('modal-add-cat');
 }
 
@@ -1822,7 +1842,50 @@ function confirmNC(){
   document.getElementById('devis-nc-block').style.display='none';
   showToast('✅ Client "'+full+'" créé');
 }
-function saveDevis(){closeModal('modal-new-devis');showToast('✅ Devis DEV-2026-025 créé');}
+function saveDevis(){
+  const sel=document.getElementById('devis-client-sel');
+  if(!sel.value||sel.value==='new'){showToast('⚠️ Sélectionnez un client');return;}
+  const clientName=sel.selectedOptions[0]?.textContent.replace(/^＋ /,'').trim()||'';
+  const dateVal=document.getElementById('devis-date').value;
+  const lignes=[];
+  document.querySelectorAll('#devis-lines .devis-item').forEach(div=>{
+    const idStr=div.id.replace('dl-','');
+    const selEl=div.querySelector('select');
+    const raw=selEl?.selectedOptions[0]?.textContent||'';
+    const designation=raw.replace(/\s*\([^)]*€\)$/,'').trim();
+    const qte=parseFloat(document.getElementById('qty-'+idStr)?.value)||0;
+    const pu=parseFloat(document.getElementById('pu-'+idStr)?.value)||0;
+    if(designation&&designation!=='— Catalogue —'&&qte&&pu) lignes.push({designation,qte,unite:'unité',puHT:pu,tva:20});
+  });
+  if(!lignes.length){showToast('⚠️ Ajoutez au moins une ligne');return;}
+  const nums=devisList.map(d=>parseInt((d.num||'').split('-')[2]||0)).filter(Boolean);
+  const nextNum=nums.length?Math.max(...nums)+1:1;
+  const year=new Date().getFullYear();
+  const num='DEV-'+year+'-'+String(nextNum).padStart(3,'0');
+  const dateObj=dateVal?new Date(dateVal):new Date();
+  const ms=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  const dateStr=dateObj.getDate()+' '+ms[dateObj.getMonth()]+' '+dateObj.getFullYear();
+  const shortDate=dateObj.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  const validObj=new Date(dateObj); validObj.setDate(validObj.getDate()+30);
+  const validStr=validObj.getDate()+' '+ms[validObj.getMonth()]+' '+validObj.getFullYear();
+  let totalHT=0,totalTVA=0;
+  lignes.forEach(l=>{const ht=l.qte*l.puHT;totalHT+=ht;totalTVA+=ht*l.tva/100;});
+  const totalTTC=totalHT+totalTVA;
+  const fmtEuro=v=>v.toLocaleString('fr-FR',{minimumFractionDigits:0,maximumFractionDigits:0})+' €';
+  const clientId=parseInt(sel.value)||null;
+  const client=clientId?clients.find(c=>c.id===clientId):null;
+  const clientAdresse=client?(client.rue+'<br>'+client.cp+' '+client.ville):'';
+  devisData[num]={client:clientName,clientAdresse,dateEmission:dateStr,dateValidite:validStr,objet:'',lignes};
+  devisList.unshift({num,client:clientName,date:shortDate,ht:fmtEuro(totalHT),ttc:fmtEuro(totalTTC),statut:'En attente',statutCls:'ba',_stockApplied:false});
+  if(client){
+    client.devis=client.devis||[];
+    client.devis.push({num,date:shortDate,ttc:fmtEuro(totalTTC),statut:'En attente',cls:'ba'});
+    client.historique.unshift({date:dateStr,titre:'Devis créé — '+num,sub:fmtEuro(totalTTC),type:'event'});
+  }
+  renderDevisList(); renderDashboard(); saveData();
+  closeModal('modal-new-devis');
+  showToast('✅ Devis '+num+' créé');
+}
 
 // ====== CLIENTS ======
 function renderClientList(list){
@@ -1954,6 +2017,7 @@ function saveNewClient(){
   clients.push(newC);
   closeModal('modal-new-client');
   renderClientList(clients);
+  saveData();
   showToast('✅ Client "'+(p+' '+n).trim()+'" créé');
 }
 
@@ -2184,6 +2248,7 @@ function saveInterv(){
   if(clientId){ const cl=clients.find(x=>x.id===clientId); if(cl) cl.historique.unshift({date:dateStr,titre:'Nouvelle intervention — '+o,sub:m?m+' €':'',type:'event',intervId:newI.id}); }
   renderInterventions('all');
   closeModal('modal-new-interv');
+  saveData();
   showToast('✅ Intervention créée');
 }
 
@@ -2243,6 +2308,7 @@ function saveRdv(){
   renderRdvList();
   renderClientList(clients);
   renderInterventions('all');
+  saveData();
 }
 
 // ====== CALENDAR ======
@@ -2423,6 +2489,7 @@ function saveEditRdv(){
   closeModal('modal-edit-rdv');
   renderRdvList();
   renderCalendar();
+  saveData();
   showToast('✅ RDV mis à jour');
 }
 
@@ -2434,6 +2501,7 @@ function deleteRdv(){
     rdvList=rdvList.filter(x=>x.id!==id);
     closeModal('modal-edit-rdv');
     renderRdvList(); renderCalendar();
+    saveData();
     showToast('🗑️ RDV supprimé');
   });
 }
@@ -2554,7 +2622,7 @@ function saveDevisEdit(){
   const changes=onDevisStatutChange(num, oldStatut, newStatut);
   renderDevisList();
   closeModal('modal-edit-devis');
-
+  saveData();
   let msg='✅ Devis '+num+' mis à jour';
   if(changes.length){
     const wasConsuming=STOCK_CONSUMING_STATUTS.has(oldStatut);
@@ -2643,6 +2711,7 @@ function deleteCurrentInterv(){
     const idx=interventions.findIndex(x=>x.id===interv.id);
     if(idx>=0) interventions.splice(idx,1);
     backToIntervList();
+    saveData();
     showToast('🗑️ Intervention supprimée');
   });
 }
@@ -2696,6 +2765,7 @@ function saveClientEdit(){
   document.getElementById('cd-adresse').innerHTML=currentClient.rue+'<br>'+currentClient.cp+' '+currentClient.ville;
   cancelClientEdit();
   renderClientList(clients);
+  saveData();
   showToast('✅ Fiche client enregistrée');
 }
 
@@ -3071,6 +3141,7 @@ function adjustStock(id, delta){
   if(!item) return;
   item.qte=Math.max(0,item.qte+delta);
   renderStock();
+  saveData();
   showToast(delta>0?'📦 +1 ajouté — '+item.designation:'📦 −1 retiré — '+item.designation);
 }
 function setStock(id, val){
@@ -3112,6 +3183,7 @@ function confirmDeleteClient(){
   if(idx>=0) clients.splice(idx,1);
   closeModal('modal-delete-client');
   backToClientList();
+  saveData();
   showToast('🗑️ Client "'+name+'" supprimé');
   clientToDelete=null;
 }
@@ -3268,11 +3340,68 @@ function confirmConvertDevisToFac(){
   renderDevisList();
   renderFacList();
   renderDashboard();
+  saveData();
   showToast('✅ Facture '+facNum+' créée depuis '+num+' — Statut devis → Accepté');
 }
 
+// ====== EDIT INTERVENTION ======
+function openEditInterv(){
+  if(!currentInterv) return;
+  document.getElementById('ei-objet').value=currentInterv.objet||'';
+  const d=currentInterv.date;
+  if(d){const p=d.split('/');if(p.length===3) document.getElementById('ei-date').value='20'+p[2]+'-'+p[1]+'-'+p[0];}
+  document.getElementById('ei-montant').value=parseFloat((currentInterv.montant||'').replace(/[^0-9.]/g,''))||'';
+  openModal('modal-edit-interv');
+}
+function saveIntervEdit(){
+  if(!currentInterv) return;
+  const objet=document.getElementById('ei-objet').value.trim();
+  if(!objet){showToast('⚠️ Objet obligatoire');return;}
+  const dateVal=document.getElementById('ei-date').value;
+  const montant=document.getElementById('ei-montant').value;
+  currentInterv.objet=objet;
+  if(dateVal) currentInterv.date=new Date(dateVal).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  currentInterv.montant=montant?montant+' €':'—';
+  document.getElementById('id-objet').textContent=objet;
+  document.getElementById('id-date').textContent=currentInterv.date;
+  document.getElementById('id-montant').textContent=currentInterv.montant;
+  document.getElementById('interv-topbar-title').textContent='Dossier — '+currentInterv.client;
+  renderInterventions('all'); saveData();
+  closeModal('modal-edit-interv');
+  showToast('✅ Intervention mise à jour');
+}
+
+// ====== LOCALSTORAGE ======
+function saveData(){
+  try{
+    localStorage.setItem('lg_clients',JSON.stringify(clients));
+    localStorage.setItem('lg_interventions',JSON.stringify(interventions));
+    localStorage.setItem('lg_devisList',JSON.stringify(devisList));
+    localStorage.setItem('lg_devisData',JSON.stringify(devisData));
+    localStorage.setItem('lg_facturesList',JSON.stringify(facturesList));
+    localStorage.setItem('lg_factureData',JSON.stringify(factureData));
+    localStorage.setItem('lg_rdvList',JSON.stringify(rdvList));
+    localStorage.setItem('lg_stockItems',JSON.stringify(stockItems));
+    localStorage.setItem('lg_catalogue',JSON.stringify(catalogue));
+  }catch(e){}
+}
+function loadData(){
+  try{
+    const c=localStorage.getItem('lg_clients'); if(c) clients=JSON.parse(c);
+    const i=localStorage.getItem('lg_interventions'); if(i) interventions=JSON.parse(i);
+    const dl=localStorage.getItem('lg_devisList'); if(dl) devisList=JSON.parse(dl);
+    const dd=localStorage.getItem('lg_devisData'); if(dd){Object.keys(devisData).forEach(k=>delete devisData[k]);Object.assign(devisData,JSON.parse(dd));}
+    const fl=localStorage.getItem('lg_facturesList'); if(fl) facturesList=JSON.parse(fl);
+    const fd=localStorage.getItem('lg_factureData'); if(fd){Object.keys(factureData).forEach(k=>delete factureData[k]);Object.assign(factureData,JSON.parse(fd));}
+    const rdv=localStorage.getItem('lg_rdvList'); if(rdv) rdvList=JSON.parse(rdv);
+    const si=localStorage.getItem('lg_stockItems'); if(si) stockItems=JSON.parse(si);
+    const cat=localStorage.getItem('lg_catalogue'); if(cat){const p=JSON.parse(cat);catalogue.prestations=p.prestations;catalogue.materiel=p.materiel;}
+  }catch(e){}
+}
+
 // ====== INIT ======
-initStockImpact();
+loadData();
+if(!localStorage.getItem('lg_stockItems')) initStockImpact();
 renderCalendar();
 renderRdvList();
 renderClientList(clients);
