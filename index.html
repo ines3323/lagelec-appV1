@@ -1034,7 +1034,7 @@ tbody tr:last-child td{border-bottom:none}
 
 <!-- ===== ANALYSE ===== -->
 <div id="page-analyse" class="page">
-  <div class="topbar"><h2>Analyse CA & Trésorerie</h2></div>
+  <div class="topbar"><h2>Analyse CA & Trésorerie</h2><div class="topbar-actions"><button class="btn btn-accent" onclick="exportAnalysePDF()">📥 Export PDF</button></div></div>
   <div class="content">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">
       <span style="font-size:12.5px;color:var(--muted);font-weight:500">Période :</span>
@@ -3557,6 +3557,75 @@ function exportFacListPDF(){
 function exportClientListPDF(){
   const rows=clients.map(c=>[(c.prenom+' '+c.nom).trim()||'—',c.type||'—',c.tel||'—',([c.cp,c.ville].filter(Boolean).join(' '))||'—',(c.devis||[]).length,(c.factures||[]).length]);
   exportListPDF('Liste des clients',['Nom','Type','Téléphone','Ville','Devis','Factures'],rows,'clients_'+new Date().toISOString().slice(0,10)+'.pdf');
+}
+
+async function exportAnalysePDF(){
+  const today=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
+  const periodLabels={day:'Jour',week:'Semaine',month:'Mois',year:'Année'};
+  const periode=periodLabels[currentPeriod]||currentPeriod;
+  // Capture the analyse content section
+  const content=document.querySelector('#page-analyse .content');
+  if(!content){showToast('⚠️ Page non disponible');return;}
+  showToast('⏳ Génération du PDF...');
+  // Prepend a small header into a wrapper, capture it
+  const wrapper=document.createElement('div');
+  wrapper.style.cssText='background:#fff;padding:32px 40px;width:1100px;position:fixed;left:-9999px;top:0;font-family:"Segoe UI",sans-serif';
+  wrapper.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1C00B8">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;background:#1C00B8;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">💡</div>
+        <div>
+          <div style="font-size:18px;font-weight:800;color:#1C00B8;letter-spacing:2px">LAGELEC</div>
+          <div style="font-size:11px;color:#6b7280">Électricité générale · Blanquefort (33)</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:15px;font-weight:700;color:#1a1a2e">Analyse CA & Trésorerie</div>
+        <div style="font-size:11px;color:#6b7280">Période : ${periode} · Exporté le ${today}</div>
+      </div>
+    </div>`;
+  // Clone the content so we don't move the live charts
+  const clone=content.cloneNode(true);
+  // Copy canvas pixel data from live canvases to cloned ones
+  const liveCanvases=content.querySelectorAll('canvas');
+  const cloneCanvases=clone.querySelectorAll('canvas');
+  liveCanvases.forEach((cv,i)=>{
+    if(cloneCanvases[i]){
+      cloneCanvases[i].width=cv.width; cloneCanvases[i].height=cv.height;
+      cloneCanvases[i].getContext('2d').drawImage(cv,0,0);
+    }
+  });
+  clone.style.cssText='width:1020px';
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+  try{
+    const canvas=await html2canvas(wrapper,{scale:1.5,useCORS:true,backgroundColor:'#fff',logging:false});
+    const imgData=canvas.toDataURL('image/jpeg',0.92);
+    const{jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const pdfW=pdf.internal.pageSize.getWidth();
+    const pdfH=pdf.internal.pageSize.getHeight();
+    const ratio=canvas.width/canvas.height;
+    const imgH=pdfW/ratio;
+    if(imgH<=pdfH){
+      pdf.addImage(imgData,'JPEG',0,0,pdfW,imgH);
+    } else {
+      let remaining=imgH,y=0;
+      while(remaining>0){
+        const sliceH=Math.min(pdfH,remaining);
+        const sc=document.createElement('canvas');
+        sc.width=canvas.width; sc.height=Math.round(sliceH/imgH*canvas.height);
+        sc.getContext('2d').drawImage(canvas,0,Math.round(y/imgH*canvas.height),canvas.width,sc.height,0,0,canvas.width,sc.height);
+        if(y>0) pdf.addPage();
+        pdf.addImage(sc.toDataURL('image/jpeg',0.92),'JPEG',0,0,pdfW,sliceH);
+        y+=sliceH; remaining-=sliceH;
+      }
+    }
+    const filename='analyse_CA_'+new Date().toISOString().slice(0,10)+'.pdf';
+    pdf.save(filename);
+    showToast('✅ PDF téléchargé : '+filename);
+  }catch(e){showToast('❌ Erreur export PDF');}
+  document.body.removeChild(wrapper);
 }
 
 function resetAllData(){
