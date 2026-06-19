@@ -1060,10 +1060,10 @@ tbody tr:last-child td{border-bottom:none}
       <button class="period-btn" onclick="setPeriod('year',this)">Année</button>
     </div>
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-icon si-green">💶</div><div><div class="stat-label">CA encaissé</div><div class="stat-value" id="kpi-ca">11 240 €</div><div class="stat-sub" style="color:var(--green)" id="kpi-ca-sub">↑ +12% vs période préc.</div></div></div>
-      <div class="stat-card"><div class="stat-icon si-amber">⏳</div><div><div class="stat-label">En attente</div><div class="stat-value" id="kpi-att">5 080 €</div><div class="stat-sub" style="color:var(--muted)" id="kpi-att-sub">3 factures</div></div></div>
-      <div class="stat-card"><div class="stat-icon si-blue">📋</div><div><div class="stat-label">Devis signés</div><div class="stat-value" id="kpi-devis">6</div><div class="stat-sub" style="color:var(--muted)" id="kpi-devis-sub">Taux 75%</div></div></div>
-      <div class="stat-card"><div class="stat-icon si-purple">📊</div><div><div class="stat-label">Marge moyenne</div><div class="stat-value" id="kpi-marge">42%</div><div class="stat-sub" style="color:var(--green)" id="kpi-marge-sub">↑ +3pts</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">💶</div><div><div class="stat-label">CA encaissé</div><div class="stat-value" id="kpi-ca">—</div><div class="stat-sub" id="kpi-ca-sub" style="color:var(--muted)">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-amber">⏳</div><div><div class="stat-label">En attente</div><div class="stat-value" id="kpi-att">—</div><div class="stat-sub" id="kpi-att-sub" style="color:var(--muted)">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">📋</div><div><div class="stat-label">Devis acceptés</div><div class="stat-value" id="kpi-devis">—</div><div class="stat-sub" id="kpi-devis-sub" style="color:var(--muted)">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-purple">🔧</div><div><div class="stat-label">Interventions actives</div><div class="stat-value" id="kpi-marge">—</div><div class="stat-sub" id="kpi-marge-sub" style="color:var(--muted)">—</div></div></div>
     </div>
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px">
       <div class="card">
@@ -1071,12 +1071,12 @@ tbody tr:last-child td{border-bottom:none}
         <div class="card-body"><canvas id="chart-ca" height="220"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-header"><h3>Répartition par type</h3></div>
+        <div class="card-header"><h3>Interventions par étape</h3></div>
         <div class="card-body"><canvas id="chart-pie" height="220"></canvas></div>
       </div>
     </div>
     <div class="card">
-      <div class="card-header"><h3>Trésorerie prévisionnelle</h3></div>
+      <div class="card-header"><h3>Encaissements cumulés vs CA facturé</h3></div>
       <div class="card-body"><canvas id="chart-tresorerie" height="160"></canvas></div>
     </div>
   </div>
@@ -2427,51 +2427,123 @@ function nextMonth(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCale
 
 // ====== ANALYSE ======
 let chartCA=null,chartPie=null,chartTreso=null;
-const analyseData={
-  day:{labels:['8h','9h','10h','11h','12h','14h','15h','16h','17h'],ca:[0,180,0,0,320,0,0,450,0],enc:[0,180,0,0,0,0,0,450,0],kpis:{ca:'630 €',att:'320 €',devis:'1',marge:'38%'}},
-  week:{labels:['Lun','Mar','Mer','Jeu','Ven','Sam'],ca:[820,1200,340,2100,680,0],enc:[820,0,340,0,680,0],kpis:{ca:'1 840 €',att:'3 300 €',devis:'3',marge:'40%'}},
-  month:{labels:['S1','S2','S3','S4'],ca:[3200,4100,2800,4140],enc:[3200,2200,2640,3200],kpis:{ca:'11 240 €',att:'5 080 €',devis:'6',marge:'42%'}},
-  year:{labels:['Jan','Fév','Mar','Avr','Mai','Juin'],ca:[8200,9100,11400,10800,13200,14280],enc:[7800,8900,10200,10400,12100,11240],kpis:{ca:'124 800 €',att:'18 200 €',devis:'48',marge:'44%'}},
-};
 let currentPeriod='month';
+
+function parseTTCVal(s){return parseFloat((s||'').replace(/\s/g,'').replace('€','').replace(',','.'))||0;}
+function parseFacDate(s){
+  if(!s) return null;
+  const p=s.split('/');
+  if(p.length===3) return new Date('20'+p[2],parseInt(p[1])-1,parseInt(p[0]));
+  return null;
+}
+function computeAnalyseData(period){
+  const now=new Date();
+  let labels,slotFn;
+  if(period==='year'){
+    labels=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+    slotFn=d=>(d&&d.getFullYear()===now.getFullYear())?d.getMonth():-1;
+  } else if(period==='month'){
+    labels=['S1 (1-7)','S2 (8-14)','S3 (15-21)','S4 (22+)'];
+    slotFn=d=>{
+      if(!d||d.getFullYear()!==now.getFullYear()||d.getMonth()!==now.getMonth()) return -1;
+      const day=d.getDate(); return day<=7?0:day<=14?1:day<=21?2:3;
+    };
+  } else if(period==='week'){
+    labels=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+    const dow=now.getDay(); const startW=new Date(now);
+    startW.setDate(now.getDate()-(dow===0?6:dow-1)); startW.setHours(0,0,0,0);
+    slotFn=d=>{
+      if(!d) return -1;
+      const diff=Math.floor((d-startW)/(864e5));
+      return(diff>=0&&diff<7)?diff:-1;
+    };
+  } else { // day
+    labels=['Matin','Après-midi','Soir'];
+    slotFn=d=>(d&&d.toDateString()===now.toDateString())?0:-1;
+  }
+  const n=labels.length;
+  const caArr=new Array(n).fill(0);
+  const encArr=new Array(n).fill(0);
+  facturesList.forEach(f=>{
+    const d=parseFacDate(f.date);
+    const slot=slotFn(d);
+    if(slot>=0){
+      const v=parseTTCVal(f.ttc);
+      caArr[slot]+=v;
+      if(f.statut==='Payée') encArr[slot]+=v;
+    }
+  });
+  // KPIs
+  const fmtE=v=>v?v.toLocaleString('fr-FR',{maximumFractionDigits:0})+' €':'0 €';
+  const paid=facturesList.filter(f=>f.statut==='Payée').reduce((s,f)=>s+parseTTCVal(f.ttc),0);
+  const pending=facturesList.filter(f=>f.statut==='En attente'||f.statut==='En retard').reduce((s,f)=>s+parseTTCVal(f.ttc),0);
+  const pendingCount=facturesList.filter(f=>f.statut==='En attente'||f.statut==='En retard').length;
+  const paidCount=facturesList.filter(f=>f.statut==='Payée').length;
+  const devisAcceptes=devisList.filter(d=>d.statut==='Accepté').length;
+  const devisTotal=devisList.length;
+  const taux=devisTotal?Math.round(devisAcceptes/devisTotal*100):0;
+  const activeInterv=interventions.filter(i=>i.etape!=='paye'&&i.etape!=='annule').length;
+  // Pie: interventions par étape
+  const etapes=['diagnostic','devis','rdv','facture','paye'];
+  const etapeLabels=['Diagnostic','Devis','RDV','Facturé','Payé'];
+  const etapeCounts=etapes.map(e=>interventions.filter(i=>i.etape===e).length);
+  return{labels,ca:caArr,enc:encArr,
+    kpis:{ca:fmtE(paid),caSub:paidCount+' facture'+(paidCount!==1?'s':''),
+      att:fmtE(pending),attSub:pendingCount+' facture'+(pendingCount!==1?'s':''),
+      devis:devisAcceptes+' / '+devisTotal,devisSub:'Taux acceptation '+taux+'%',
+      interv:String(activeInterv),intervSub:interventions.length+' au total'},
+    pie:{labels:etapeLabels,data:etapeCounts}};
+}
 function setPeriod(p,btn){
   currentPeriod=p;
   document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const d=analyseData[p];
-  document.getElementById('kpi-ca').textContent=d.kpis.ca;
-  document.getElementById('kpi-att').textContent=d.kpis.att;
-  document.getElementById('kpi-devis').textContent=d.kpis.devis;
-  document.getElementById('kpi-marge').textContent=d.kpis.marge;
   renderCharts();
 }
 function renderCharts(){
-  const d=analyseData[currentPeriod];
+  const d=computeAnalyseData(currentPeriod);
+  // Update KPIs
+  document.getElementById('kpi-ca').textContent=d.kpis.ca;
+  document.getElementById('kpi-ca-sub').textContent=d.kpis.caSub;
+  document.getElementById('kpi-att').textContent=d.kpis.att;
+  document.getElementById('kpi-att-sub').textContent=d.kpis.attSub;
+  document.getElementById('kpi-devis').textContent=d.kpis.devis;
+  document.getElementById('kpi-devis-sub').textContent=d.kpis.devisSub;
+  document.getElementById('kpi-marge').textContent=d.kpis.interv;
+  document.getElementById('kpi-marge-sub').textContent=d.kpis.intervSub;
+  // Destroy old charts
   if(chartCA) chartCA.destroy();
   if(chartPie) chartPie.destroy();
   if(chartTreso) chartTreso.destroy();
-  const defaults={font:{family:"'Segoe UI',system-ui,sans-serif",size:12},color:'#6b7280'};
-  Chart.defaults.font=defaults.font; Chart.defaults.color=defaults.color;
+  Chart.defaults.font={family:"'Segoe UI',system-ui,sans-serif",size:12};
+  Chart.defaults.color='#6b7280';
+  const hasCA=d.ca.some(v=>v>0)||d.enc.some(v=>v>0);
   chartCA=new Chart(document.getElementById('chart-ca'),{
     type:'bar',
     data:{labels:d.labels,datasets:[
-      {label:'CA facturé',data:d.ca,backgroundColor:'rgba(28,0,184,0.15)',borderColor:'#1C00B8',borderWidth:2,borderRadius:4},
-      {label:'Encaissé',data:d.enc,backgroundColor:'rgba(16,185,129,0.2)',borderColor:'#10b981',borderWidth:2,borderRadius:4,type:'line',fill:false,tension:.3,pointRadius:4}
+      {label:'CA facturé (TTC)',data:d.ca,backgroundColor:'rgba(28,0,184,0.15)',borderColor:'#1C00B8',borderWidth:2,borderRadius:4},
+      {label:'Encaissé (Payé)',data:d.enc,backgroundColor:'rgba(16,185,129,0.2)',borderColor:'#10b981',borderWidth:2,borderRadius:4,type:'line',fill:false,tension:.3,pointRadius:4}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'€'}}}}
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'},title:{display:!hasCA,text:'Aucune facture sur cette période',color:'#9ca3af',font:{size:13}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v===0?'0':v.toLocaleString('fr-FR')+'€'}}}}
   });
+  const pieHasData=d.pie.data.some(v=>v>0);
   chartPie=new Chart(document.getElementById('chart-pie'),{
     type:'doughnut',
-    data:{labels:['Main d\'œuvre','Matériel','Déplacement'],datasets:[{data:[55,35,10],backgroundColor:['#1C00B8','#F5A623','#10b981'],borderWidth:0}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},cutout:'65%'}
+    data:{labels:d.pie.labels,datasets:[{data:pieHasData?d.pie.data:[1],backgroundColor:pieHasData?['#6366f1','#1C00B8','#F5A623','#10b981','#059669']:['#e5e7eb'],borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom'},title:{display:!pieHasData,text:'Aucune intervention',color:'#9ca3af',font:{size:13}}},
+      cutout:'65%'}
   });
-  const treso=d.ca.map((v,i)=>v - d.enc[i]);
+  const cumul=d.enc.map((v,i,a)=>a.slice(0,i+1).reduce((s,x)=>s+x,0));
   chartTreso=new Chart(document.getElementById('chart-tresorerie'),{
     type:'line',
     data:{labels:d.labels,datasets:[
-      {label:'Solde prévisionnel (€)',data:d.enc.map((v,i,a)=>a.slice(0,i+1).reduce((s,x)=>s+x,0)),backgroundColor:'rgba(28,0,184,0.08)',borderColor:'#1C00B8',fill:true,tension:.4,pointRadius:4}
+      {label:'Encaissements cumulés (€)',data:cumul,backgroundColor:'rgba(28,0,184,0.08)',borderColor:'#1C00B8',fill:true,tension:.4,pointRadius:4},
+      {label:'CA facturé cumulé (€)',data:d.ca.map((v,i,a)=>a.slice(0,i+1).reduce((s,x)=>s+x,0)),backgroundColor:'rgba(245,166,35,0.05)',borderColor:'#F5A623',fill:false,tension:.4,pointRadius:4,borderDash:[4,3]}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{ticks:{callback:v=>v+'€'}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v===0?'0':v.toLocaleString('fr-FR')+'€'}}}}
   });
 }
 
